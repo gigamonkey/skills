@@ -10,7 +10,9 @@ The user wants to work on the first unchecked item in a specific section of `pla
 
 ## Steps
 
-### 1. Read plans/TODO.md
+### 1. Read TODO.md
+
+It will either be in the root directory or under `plans/`. If they both exist prefer the one in `plans/`.
 
 Read the file and find the first `- [ ]` item under the section header matching what the user asked for (e.g. "Small", "Medium", "Large"). The match is case-insensitive. If the user didn't specify a section header, e.g. "do the next todo", then just pick the first `- [ ]` item from the top of the file.
 
@@ -30,8 +32,8 @@ Once they tell you the item is done you MUST update `plans/TODO.md` as follows:
 
 2. **If needed, add new item to Plans**: If the work produced a plan file in `plans/`, there are two sub steps you MUST complete:
 
-    1. Append ` (plan: plans/filename.md)` to the end of the original todo item.
+    1. Append ` (plan: [filename](plans/filename.md))` to the end of the original todo item.
 
-    2. Add an unchecked item at the END of the `## Plans` section that says “Implement the plan in plans/…” with the name of the plan file filled in.
+    2. Add an unchecked item at the END of the `## Plans` section that says “Implement the plan in plans/…” with the name of the plan file filled in and linked.
 
 The first step is required every time you are told an item is finished. Do not leave a completed item in its original section. And the second step is required if you wrote a plan.
