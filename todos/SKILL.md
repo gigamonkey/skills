@@ -1,5 +1,5 @@
 ---
-name: do-next-todo
+name: todos
 description: Use this skill when the user says "do next X todo" where X is a section header in plans/TODO.md (e.g. "do next small todo", "do next medium todo"). Finds the first unchecked item under that header and does it.
 version: 1.0.0
 ---
