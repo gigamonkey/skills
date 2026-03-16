@@ -55,7 +55,13 @@ Read the current `CLAUDE.md` and compare it to what you found. Look for:
 - New modules, directories, or patterns that aren't mentioned
 - Outdated descriptions of how things work
 
-### 5. Update CLAUDE.md
+### 5. Compare to ~/.claude/CLAUDE.md
+
+Read the global `~/.claude/CLAUDE.md` if it exists and compare it's contents to what you found in the project `CLAUDE.md`. Look for:
+- Items in the global `CLAUDE.md` that are the same as the ones in the local `CLAUDE.md`. They can be removed from the local one.
+- Items between the two files that conflict. The user should be asked about those.
+
+### 6. Update CLAUDE.md
 
 Edit `CLAUDE.md` to fix anything that is out of date and add anything meaningful that is missing. Follow these guidelines:
 
@@ -63,7 +69,8 @@ Edit `CLAUDE.md` to fix anything that is out of date and add anything meaningful
 - **Keep it accurate**: if you're not sure whether something changed, re-read the relevant source files before updating.
 - **Match existing style**: follow the heading hierarchy and tone of the existing document.
 - **Don't bloat it**: remove outdated content rather than leaving stale notes alongside corrections.
+- **Don't repeat yourself**: remove things from the local `CLAUDE.md` which are covered in `~/.claude/CLAUDE.md`.
 
-### 6. Summarize what you changed
+### 7. Summarize what you changed
 
 After editing, briefly describe what you updated and why, so the user can review your reasoning.
