@@ -22,8 +22,10 @@ since the last time you read it. The correct item to work on is determined by
 the file's current contents at the moment you read it.
 
 Read the file and find the first `- [ ]` item under the section header matching
-what the user asked for (e.g. "Small", "Medium", "Large"). The match is
-case-insensitive. If the user didn't specify a section header, e.g. "do the next
+what the user asked for (e.g. "Small", "Medium", "Large"). Match
+case-insensitively against the full header text after stripping leading `#`
+characters and surrounding whitespace — so "## Small Todos" matches "small" but
+not "smallish". If the user didn't specify a section header, e.g. "do the next
 todo", then just pick the first `- [ ]` item from the top of the file.
 
 If there are no unchecked items in the named section, tell the user and don't do
@@ -37,21 +39,31 @@ request directly. Apply any relevant skills if they match.
 
 If there is text in the section before the list of items, it is instructions
 about how to do the work. Follow these when doing the work. You may **not**
-ignore these intructions.
+ignore these instructions.
+
+A checklist item includes its checkbox line **and** any continuation lines
+indented beneath it. Treat all of those lines as part of the same item when
+reading, moving, or updating it.
 
 ### 3. Wait for confirmation that you are done
 
-Unless the per-section instructions told you you could mark an item complete on
-your own, After you think you are done, let the user know. They will tell you
-when the item is actually done. They may ask for further changes or make changes
-themself. If you made a PR, the item is not done until the PR is merged. If you
-wrote a plan, the item is not done until the user has approved the plan.
+After completing the work in Step 2, **stop and summarize** what you did, then
+wait. Do not touch `plans/TODO.md` yet.
+
+The user will tell you when the item is actually done. They may ask for further
+changes or make changes themselves. As a reminder:
+
+- If you made a PR, remind the user that items are typically marked done after
+  the PR is merged, and ask how they'd like to proceed.
+- If you wrote a plan, the item is not done until the user has approved the plan.
 
 Once they tell you the item is done you MUST update `plans/TODO.md` as follows:
 
-1. **Move the item**: Remove the item from its current section and add it to the
-   `## Done` section. Read the text at the beginning of the `## Done` section to
-   find out where in the list you should put the newly completed item. When you
+1. **Move the item**: Remove the item from its current section (including any
+   indented continuation lines) and add it to the `## Done` section. Read the
+   text at the beginning of the `## Done` section to find out where in the list
+   you should put the newly completed item. If the `## Done` section has no such
+   placement instructions, append the item at the end of that section. When you
    move it change the checkbox from `- [ ]` to `- [x]`.
 
 2. **If needed, add new item to Plans**: If the work produced a plan file in
