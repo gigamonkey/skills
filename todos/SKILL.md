@@ -14,6 +14,8 @@ The user wants to work on the first unchecked item in a specific section of `pla
 
 It will either be in the root directory or under `plans/`. If they both exist prefer the one in `plans/`.
 
+**Always read TODO.md fresh using the Read tool before selecting an item.** Do not rely on any previously seen version of the file — it may have been updated since the last time you read it. The correct item to work on is determined by the file's current contents at the moment you read it.
+
 Read the file and find the first `- [ ]` item under the section header matching what the user asked for (e.g. "Small", "Medium", "Large"). The match is case-insensitive. If the user didn't specify a section header, e.g. "do the next todo", then just pick the first `- [ ]` item from the top of the file.
 
 If there are no unchecked items in the named section, tell the user and don't do anything else. Do *not* do items from another section if the user specified a section.
