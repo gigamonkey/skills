@@ -1,6 +1,6 @@
 ---
 name: todos
-description: Use this skill when the user says "do next X todo" where X is a section header in plans/TODO.md (e.g. "do next small todo", "do next medium todo"). Finds the first unchecked item under that header and does it.
+description: Use this skill when the user says "do next X todo" where X is a section header in plans/TODO.md (e.g. "do next small todo", "do next medium todo"), or when the user asks "what's next" or "what's next in the TODO list" to show the next unchecked item(s). Finds the first unchecked item under that header and does it.
 version: 1.0.0
 ---
 
@@ -31,6 +31,10 @@ todo", then just pick the first `- [ ]` item from the top of the file.
 If there are no unchecked items in the named section, tell the user and don't do
 anything else. Do *not* do items from another section if the user specified a
 section.
+
+If the user is just asking "what's next" (i.e. they want to see what's
+available, not start working), list the first unchecked item from each
+non-empty section and stop — do not proceed to Step 2.
 
 ### 2. Do the work
 
