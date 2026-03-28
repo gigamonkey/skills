@@ -631,6 +631,81 @@ def cmd_todo_done(args):
     }))
 
 
+def normalize_item_text(text):
+    """Normalize item text for fuzzy matching: lowercase, collapse whitespace."""
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def cmd_check_progress(args):
+    wip_text = read_wip()
+    projects = parse_projects_table(wip_text)
+    project_home = {p["name"]: p["home"] for p in projects}
+
+    sec = get_section_content(wip_text, "In progress")
+    if not sec:
+        print(json.dumps({"clearable": [], "unresolved": []}))
+        return
+
+    _, _, content = sec
+    in_progress = parse_items(content)
+
+    clearable = []
+    unresolved = []
+
+    for item_text, _, _ in in_progress:
+        m = re.match(r"^\*\*(.+?)\*\*\s*(.*)", item_text, re.DOTALL)
+        if not m:
+            unresolved.append({"project": "", "wip_item": item_text, "reason": "no project prefix"})
+            continue
+
+        project = m.group(1)
+        wip_body = normalize_item_text(m.group(2))
+
+        home = project_home.get(project)
+        if not home:
+            unresolved.append({"project": project, "wip_item": item_text, "reason": "project not in table"})
+            continue
+
+        todo_path = resolve_todo_file(home)
+        if not todo_path:
+            unresolved.append({"project": project, "wip_item": item_text, "reason": "no TODO.md found"})
+            continue
+
+        todo_text = todo_path.read_text()
+        done_sec = get_section_content(todo_text, "Done")
+        if not done_sec:
+            unresolved.append({"project": project, "wip_item": item_text, "reason": "no Done section in TODO.md"})
+            continue
+
+        _, _, done_content = done_sec
+        done_items = parse_todo_items(done_content)
+
+        matched_todo = None
+        for todo_text_item, is_checked, _, _, _ in done_items:
+            if not is_checked:
+                continue
+            todo_norm = normalize_item_text(todo_text_item)
+            # Match if either is a substring of the other (handles truncation/minor diffs)
+            if wip_body in todo_norm or todo_norm in wip_body:
+                matched_todo = todo_text_item
+                break
+
+        if matched_todo:
+            clearable.append({
+                "project": project,
+                "wip_item": item_text,
+                "todo_item": matched_todo,
+            })
+        else:
+            unresolved.append({
+                "project": project,
+                "wip_item": item_text,
+                "reason": "not found in Done section",
+            })
+
+    print(json.dumps({"clearable": clearable, "unresolved": unresolved}, indent=2))
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -675,6 +750,8 @@ def main():
     td.add_argument("--plan", default=None)
     td.add_argument("--file", default=None)
 
+    sub.add_parser("check-progress")
+
     args = parser.parse_args()
 
     cmds = {
@@ -687,6 +764,7 @@ def main():
         "todo-add": cmd_todo_add,
         "todo-next": cmd_todo_next,
         "todo-done": cmd_todo_done,
+        "check-progress": cmd_check_progress,
     }
     cmds[args.command](args)
 

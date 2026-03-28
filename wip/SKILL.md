@@ -3,11 +3,12 @@ name: wip
 description: >
   Use this skill when the user says "add to wip: ...", "wip add: ...",
   "what's next in wip", "wip status", "show wip", "dispatch wip",
-  "dispatch next wip item", or "{project} wip is done". Manages the
-  global WIP.md TODO list at ~/hacks/wip/WIP.md — adding items,
-  showing what's next, dispatching items to per-project TODO.md files,
-  and marking in-progress items as done.
-version: 2.0.0
+  "dispatch next wip item", "{project} wip is done", or "check wip
+  progress" / "sync wip done". Manages the global WIP.md TODO list at
+  ~/hacks/wip/WIP.md — adding items, showing what's next, dispatching
+  items to per-project TODO.md files, marking in-progress items as
+  done, and syncing completed items from per-project TODOs.
+version: 2.1.0
 ---
 
 # WIP Skill
@@ -95,6 +96,26 @@ project's `todos` skill can work on it.
    to the user and ask which one is done. Then re-run with `--index <n>`.
 3. If there's an error (no items), tell the user.
 4. On success, confirm what was removed.
+
+### 5. Check progress
+
+**Trigger:** "check wip progress", "sync wip done", "clear done wip items"
+
+1. Run:
+   ```
+   python3 ~/.claude/skills/wip/wip.py check-progress
+   ```
+2. The output has `clearable` (items whose text matches a `[x]` done item in
+   the project's TODO.md) and `unresolved` (items that couldn't be checked,
+   with a reason).
+3. If there are clearable items, show them to the user with the matched TODO
+   done item for confirmation.
+4. For each confirmed item, remove it from `## In progress`:
+   ```
+   python3 ~/.claude/skills/wip/wip.py done --project <name>
+   ```
+   If multiple in-progress items exist for the same project, use `--index`.
+5. Report what was cleared and mention any unresolved items.
 
 ## Notes
 
