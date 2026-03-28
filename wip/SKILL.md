@@ -78,11 +78,10 @@ project's `todos` skill can work on it.
    `list-projects`. Then add the item to the project's TODO.md:
    ```
    python3 ~/.claude/skills/wip/wip.py todo-add \
-     --home <project_home> --section "<section_hint>" --item "<item_text>"
+     --home <project_home> --item "<item_text>"
    ```
-   Omit `--section` if no hint was returned (defaults to first section).
-4. Tell the user what was dispatched and where (project, TODO file path, and
-   section).
+   This always adds to `## Up next` (creating it if needed).
+4. Tell the user what was dispatched and where (project, TODO file path).
 
 ### 4. Mark WIP done
 

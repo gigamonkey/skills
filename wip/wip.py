@@ -272,15 +272,7 @@ def cmd_dispatch(args):
         sys.exit(1)
 
     item_text, item_start, item_end = items[0]
-
-    # Parse section hint from parenthesized suffix
-    section_hint = ""
-    hint_match = re.search(r"\((\w[\w\s-]*)\)\s*$", item_text)
-    if hint_match:
-        section_hint = hint_match.group(1).strip()
-        clean_text = item_text[:hint_match.start()].strip()
-    else:
-        clean_text = item_text
+    clean_text = item_text
 
     # Remove item from project section
     abs_start = heading_end + item_start
@@ -309,7 +301,6 @@ def cmd_dispatch(args):
         "ok": True,
         "project": project,
         "item": clean_text,
-        "section_hint": section_hint,
     }))
 
 
@@ -393,7 +384,7 @@ def create_todo_file(home):
     plans_dir = home / "plans"
     plans_dir.mkdir(parents=True, exist_ok=True)
     path = plans_dir / "TODO.md"
-    path.write_text("# TODO\n\n## Small\n\n## Medium\n\n## Large\n\n## Plans\n\n## Done\n")
+    path.write_text("# TODO\n\n## In progress\n\n## Up next\n\n## Done\n")
     return path
 
 
@@ -454,6 +445,42 @@ def get_section_instructions(content):
 # TODO.md commands
 # ---------------------------------------------------------------------------
 
+def ensure_up_next_section(text):
+    """Ensure ## Up next exists before ## Done. Returns updated text and section info."""
+    match = find_section_case_insensitive(text, "up next")
+    if match:
+        return text, match
+    # Create ## Up next before ## Done
+    done_match = find_section_case_insensitive(text, "done")
+    if done_match:
+        _, done_start, _ = done_match
+        text = text[:done_start] + "## Up next\n\n" + text[done_start:]
+    else:
+        text = text.rstrip("\n") + "\n\n## Up next\n\n"
+    match = find_section_case_insensitive(text, "up next")
+    return text, match
+
+
+def ensure_in_progress_section(text):
+    """Ensure ## In progress exists before ## Up next. Returns updated text and section info."""
+    match = find_section_case_insensitive(text, "in progress")
+    if match:
+        return text, match
+    # Create ## In progress before ## Up next (or Done if no Up next)
+    up_next = find_section_case_insensitive(text, "up next")
+    if up_next:
+        _, insert_start, _ = up_next
+    else:
+        done = find_section_case_insensitive(text, "done")
+        if done:
+            _, insert_start, _ = done
+        else:
+            insert_start = len(text)
+    text = text[:insert_start] + "## In progress\n\n" + text[insert_start:]
+    match = find_section_case_insensitive(text, "in progress")
+    return text, match
+
+
 def cmd_todo_add(args):
     home = args.home
     todo_path = resolve_todo_file(home, args.file)
@@ -470,12 +497,12 @@ def cmd_todo_add(args):
             sys.exit(1)
         heading, sec_start, sec_end = match
     else:
-        # Use first ## heading
-        sections = find_sections(text)
-        if not sections:
-            print(json.dumps({"error": f"No ## sections found in {todo_path}"}))
+        # Default to ## Up next, creating it if needed
+        text, match = ensure_up_next_section(text)
+        if not match:
+            print(json.dumps({"error": f"Could not find or create 'Up next' section in {todo_path}"}))
             sys.exit(1)
-        heading, sec_start, sec_end, _ = sections[0]
+        heading, sec_start, sec_end = match
 
     # Insert at end of section
     heading_end = text.index("\n", sec_start) + 1
@@ -492,6 +519,63 @@ def cmd_todo_add(args):
         "section": heading,
         "item": args.item,
     }))
+
+
+def cmd_todo_start(args):
+    """Move the first (or matched) item from ## Up next to ## In progress."""
+    home = args.home
+    todo_path = resolve_todo_file(home, args.file)
+    if not todo_path:
+        print(json.dumps({"error": f"No TODO.md found for home '{home}'"}))
+        sys.exit(1)
+
+    text = todo_path.read_text()
+
+    # Find ## Up next
+    up_next = find_section_case_insensitive(text, "up next")
+    if not up_next:
+        print(json.dumps({"error": "No 'Up next' section found"}))
+        sys.exit(1)
+
+    _, up_start, up_end = up_next
+    heading_end = text.index("\n", up_start) + 1
+    content = text[heading_end:up_end]
+    items = parse_todo_items(content)
+    unchecked = [(t, raw, s, e) for t, checked, raw, s, e in items if not checked]
+
+    if not unchecked:
+        print(json.dumps({"error": "No unchecked items in 'Up next' section"}))
+        sys.exit(1)
+
+    if args.item:
+        search = args.item.strip().lower()
+        matched = [(t, raw, s, e) for t, raw, s, e in unchecked if search in t.lower()]
+        if not matched:
+            print(json.dumps({"error": f"No unchecked item matching '{args.item}' in 'Up next'"}))
+            sys.exit(1)
+        item_text, raw, item_start, item_end = matched[0]
+    else:
+        item_text, raw, item_start, item_end = unchecked[0]
+
+    # Remove from Up next
+    abs_start = heading_end + item_start
+    abs_end = heading_end + item_end
+    text = text[:abs_start] + text[abs_end:]
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    # Ensure ## In progress exists
+    text, ip_match = ensure_in_progress_section(text)
+    _, ip_start, ip_end = ip_match
+    ip_heading_end = text.index("\n", ip_start) + 1
+
+    # Append to end of ## In progress
+    insert_pos = ip_end
+    text = text[:insert_pos].rstrip("\n") + "\n\n" + raw.rstrip("\n") + "\n" + text[insert_pos:].lstrip("\n")
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = ensure_trailing_newline(text)
+    todo_path.write_text(text)
+
+    print(json.dumps({"ok": True, "file": str(todo_path), "item": item_text}))
 
 
 def cmd_todo_next(args):
@@ -530,8 +614,42 @@ def cmd_todo_next(args):
             "instructions": instructions,
         }))
     else:
-        # List first unchecked from each section
-        result = {"file": str(todo_path), "sections": []}
+        # Check ## In progress first; if anything there, return with resuming: true
+        ip_match = find_section_case_insensitive(text, "in progress")
+        if ip_match:
+            _, ip_start, ip_end = ip_match
+            ip_heading_end = text.index("\n", ip_start) + 1
+            ip_content = text[ip_heading_end:ip_end]
+            ip_items = parse_todo_items(ip_content)
+            ip_unchecked = [t for t, checked, _, _, _ in ip_items if not checked]
+            if ip_unchecked:
+                print(json.dumps({
+                    "file": str(todo_path),
+                    "resuming": True,
+                    "section": "In progress",
+                    "item": ip_unchecked[0],
+                }))
+                return
+
+        # Then check ## Up next
+        up_match = find_section_case_insensitive(text, "up next")
+        if up_match:
+            _, up_start, up_end = up_match
+            up_heading_end = text.index("\n", up_start) + 1
+            up_content = text[up_heading_end:up_end]
+            up_items = parse_todo_items(up_content)
+            up_unchecked = [t for t, checked, _, _, _ in up_items if not checked]
+            if up_unchecked:
+                print(json.dumps({
+                    "file": str(todo_path),
+                    "resuming": False,
+                    "section": "Up next",
+                    "item": up_unchecked[0],
+                }))
+                return
+
+        # Nothing ready — show full sections summary
+        result = {"file": str(todo_path), "item": None, "sections": []}
         for heading, sec_start, sec_end, _ in find_sections(text):
             heading_end = text.index("\n", sec_start) + 1
             content = text[heading_end:sec_end]
@@ -556,23 +674,38 @@ def cmd_todo_done(args):
     text = todo_path.read_text()
     search_text = args.item.strip()
 
-    # Find the item across all sections
-    found = None
-    for heading, sec_start, sec_end, _ in find_sections(text):
-        if heading.lower() == "done":
-            continue  # don't match items already in Done
+    def search_section(heading_name):
+        match = find_section_case_insensitive(text, heading_name)
+        if not match:
+            return None
+        _, sec_start, sec_end = match
         heading_end = text.index("\n", sec_start) + 1
         content = text[heading_end:sec_end]
         items = parse_todo_items(content)
         for item_text, is_checked, raw, item_start, item_end in items:
             if is_checked:
                 continue
-            # Match by substring
             if search_text.lower() in item_text.lower():
-                found = (heading, heading_end, item_text, raw, item_start, item_end)
+                return (heading_name, heading_end, item_text, raw, item_start, item_end)
+        return None
+
+    # Search ## In progress first, then all other non-Done sections
+    found = search_section("in progress")
+    if not found:
+        for heading, sec_start, sec_end, _ in find_sections(text):
+            if heading.lower() in ("done", "in progress"):
+                continue
+            heading_end = text.index("\n", sec_start) + 1
+            content = text[heading_end:sec_end]
+            items = parse_todo_items(content)
+            for item_text, is_checked, raw, item_start, item_end in items:
+                if is_checked:
+                    continue
+                if search_text.lower() in item_text.lower():
+                    found = (heading, heading_end, item_text, raw, item_start, item_end)
+                    break
+            if found:
                 break
-        if found:
-            break
 
     if not found:
         print(json.dumps({"error": f"No unchecked item matching '{search_text}'"}))
@@ -584,13 +717,14 @@ def cmd_todo_done(args):
     done_raw = raw.replace("- [ ] ", "- [x] ", 1)
 
     # If --plan provided, append plan link to the item
+    plan_followup_needed = False
     if args.plan:
         plan_name = args.plan
         plan_link = f" (plan: [{plan_name}](plans/{plan_name}))"
-        # Insert before the trailing newline of the first line
         done_lines = done_raw.splitlines(keepends=True)
         done_lines[0] = done_lines[0].rstrip("\n") + plan_link + "\n"
         done_raw = "".join(done_lines)
+        plan_followup_needed = True
 
     # Remove from source section
     abs_start = heading_end + item_start
@@ -600,35 +734,27 @@ def cmd_todo_done(args):
     # Find Done section and append
     done_sec = get_section_content(text, "Done")
     if not done_sec:
-        # Create Done section at end
         text = text.rstrip("\n") + "\n\n## Done\n\n"
         done_sec = get_section_content(text, "Done")
 
     done_heading_end, done_end, done_content = done_sec
-    # Append at end of Done section
     insert_pos = done_end
     text = text[:insert_pos].rstrip("\n") + "\n\n" + done_raw.rstrip("\n") + "\n" + text[insert_pos:].lstrip("\n")
-
-    # If --plan provided, also add to Plans section
-    if args.plan:
-        plan_name = args.plan
-        plans_sec = get_section_content(text, "Plans")
-        if plans_sec:
-            plans_heading_end, plans_end, _ = plans_sec
-            plan_item = f"- [ ] Implement the plan in [plans/{plan_name}](plans/{plan_name})\n\n"
-            text = text[:plans_end].rstrip("\n") + "\n\n" + plan_item + text[plans_end:].lstrip("\n")
 
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = ensure_trailing_newline(text)
     todo_path.write_text(text)
 
-    print(json.dumps({
+    result = {
         "ok": True,
         "file": str(todo_path),
         "item": item_text,
         "from_section": src_heading,
-        "plan": args.plan or None,
-    }))
+    }
+    if plan_followup_needed:
+        result["plan_followup_needed"] = True
+        result["plan"] = args.plan
+    print(json.dumps(result))
 
 
 def normalize_item_text(text):
@@ -739,6 +865,11 @@ def main():
     ta.add_argument("--item", required=True)
     ta.add_argument("--file", default=None)
 
+    ts = sub.add_parser("todo-start")
+    ts.add_argument("--home", required=True)
+    ts.add_argument("--item", default=None)
+    ts.add_argument("--file", default=None)
+
     tn = sub.add_parser("todo-next")
     tn.add_argument("--home", required=True)
     tn.add_argument("--section", default="")
@@ -762,6 +893,7 @@ def main():
         "dispatch": cmd_dispatch,
         "done": cmd_done,
         "todo-add": cmd_todo_add,
+        "todo-start": cmd_todo_start,
         "todo-next": cmd_todo_next,
         "todo-done": cmd_todo_done,
         "check-progress": cmd_check_progress,
