@@ -25,17 +25,13 @@ python3 ~/.claude/skills/wip/wip.py todo-next --home "$(pwd)"
 
 Interpret the result:
 
-- **`resuming: true`** — an item is already in `## In progress`. Tell the user
-  what's in progress and resume it (skip `todo-start`, go straight to Step 2).
-
-- **`resuming: false`, item from `## Up next`** — move it to `## In progress`:
+- **`item` is non-null** — move it to `## In progress`:
   ```
   python3 ~/.claude/skills/wip/wip.py todo-start --home "$(pwd)"
   ```
   Then proceed to Step 2 with the item text.
 
-- **`item: null`** (nothing in either section) — tell the user the queue is
-  empty and stop.
+- **`item: null`** — tell the user the queue is empty and stop.
 
 ### 2. Do the work
 

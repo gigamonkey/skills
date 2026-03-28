@@ -614,24 +614,7 @@ def cmd_todo_next(args):
             "instructions": instructions,
         }))
     else:
-        # Check ## In progress first; if anything there, return with resuming: true
-        ip_match = find_section_case_insensitive(text, "in progress")
-        if ip_match:
-            _, ip_start, ip_end = ip_match
-            ip_heading_end = text.index("\n", ip_start) + 1
-            ip_content = text[ip_heading_end:ip_end]
-            ip_items = parse_todo_items(ip_content)
-            ip_unchecked = [t for t, checked, _, _, _ in ip_items if not checked]
-            if ip_unchecked:
-                print(json.dumps({
-                    "file": str(todo_path),
-                    "resuming": True,
-                    "section": "In progress",
-                    "item": ip_unchecked[0],
-                }))
-                return
-
-        # Then check ## Up next
+        # Check ## Up next for the next item to start
         up_match = find_section_case_insensitive(text, "up next")
         if up_match:
             _, up_start, up_end = up_match
@@ -642,26 +625,12 @@ def cmd_todo_next(args):
             if up_unchecked:
                 print(json.dumps({
                     "file": str(todo_path),
-                    "resuming": False,
                     "section": "Up next",
                     "item": up_unchecked[0],
                 }))
                 return
 
-        # Nothing ready — show full sections summary
-        result = {"file": str(todo_path), "item": None, "sections": []}
-        for heading, sec_start, sec_end, _ in find_sections(text):
-            heading_end = text.index("\n", sec_start) + 1
-            content = text[heading_end:sec_end]
-            items = parse_todo_items(content)
-            unchecked = [t for t, checked, _, _, _ in items if not checked]
-            if unchecked:
-                result["sections"].append({
-                    "name": heading,
-                    "item": unchecked[0],
-                    "count": len(unchecked),
-                })
-        print(json.dumps(result, indent=2))
+        print(json.dumps({"file": str(todo_path), "item": None}))
 
 
 def cmd_todo_done(args):
