@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""CLI for manipulating ~/hacks/wip/WIP.md deterministically.
+"""CLI for manipulating ~/hacks/wip/WIP.md and per-project TODO.md files.
 
 All commands output JSON to stdout. Mutating commands auto-clean empty sections.
+
+WIP.md commands: list-projects, resolve-project, status, add, dispatch, done
+TODO.md commands: todo-add, todo-next, todo-done
 """
 
 import argparse
@@ -366,6 +369,269 @@ def cmd_done(args):
 
 
 # ---------------------------------------------------------------------------
+# TODO.md helpers
+# ---------------------------------------------------------------------------
+
+def resolve_todo_file(home, file_override=None):
+    """Find the TODO.md for a project. Returns Path or None."""
+    if file_override:
+        p = Path(os.path.expanduser(file_override))
+        return p if p.exists() else None
+    home = Path(os.path.expanduser(home))
+    plans = home / "plans" / "TODO.md"
+    root = home / "TODO.md"
+    if plans.exists():
+        return plans
+    if root.exists():
+        return root
+    return None
+
+
+def create_todo_file(home):
+    """Create a basic plans/TODO.md and return its Path."""
+    home = Path(os.path.expanduser(home))
+    plans_dir = home / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    path = plans_dir / "TODO.md"
+    path.write_text("# TODO\n\n## Small\n\n## Medium\n\n## Large\n\n## Plans\n\n## Done\n")
+    return path
+
+
+def find_section_case_insensitive(text, name):
+    """Find first ## heading matching name case-insensitively (word match).
+    Returns (heading_text, start, end) or None."""
+    name_lower = name.lower().strip()
+    for heading, start, end, _ in find_sections(text):
+        # Match if the heading text equals or starts with the name
+        h_lower = heading.lower().strip()
+        if h_lower == name_lower or h_lower.startswith(name_lower + " "):
+            return heading, start, end
+    return None
+
+
+def parse_todo_items(content):
+    """Parse checkbox items from TODO section content.
+    Returns list of (checkbox_text, is_checked, raw_lines, start_offset, end_offset).
+    checkbox_text has the '[ ] ' or '[x] ' prefix stripped."""
+    items = []
+    lines = content.splitlines(keepends=True)
+    i = 0
+    while i < len(lines):
+        m = re.match(r"^- \[([ x])\] (.*)$", lines[i].rstrip("\n"))
+        if m:
+            is_checked = m.group(1) == "x"
+            item_start = sum(len(l) for l in lines[:i])
+            item_lines = [lines[i]]
+            j = i + 1
+            while j < len(lines) and re.match(r"^[ \t]", lines[j]) and not re.match(r"^- ", lines[j]):
+                item_lines.append(lines[j])
+                j += 1
+            raw = "".join(item_lines)
+            # Build the text without the checkbox prefix
+            first_line = m.group(2)
+            cont_lines = item_lines[1:]
+            checkbox_text = first_line + "".join(cont_lines).rstrip("\n")
+            item_end = sum(len(l) for l in lines[:j])
+            items.append((checkbox_text, is_checked, raw, item_start, item_end))
+            i = j
+        else:
+            i += 1
+    return items
+
+
+def get_section_instructions(content):
+    """Return instruction text before the first bullet item in a section."""
+    lines = content.splitlines(keepends=True)
+    instruction_lines = []
+    for line in lines:
+        if line.startswith("- "):
+            break
+        instruction_lines.append(line)
+    return "".join(instruction_lines).strip()
+
+
+# ---------------------------------------------------------------------------
+# TODO.md commands
+# ---------------------------------------------------------------------------
+
+def cmd_todo_add(args):
+    home = args.home
+    todo_path = resolve_todo_file(home, args.file)
+    if not todo_path:
+        todo_path = create_todo_file(home)
+
+    text = todo_path.read_text()
+    section = args.section
+
+    if section:
+        match = find_section_case_insensitive(text, section)
+        if not match:
+            print(json.dumps({"error": f"No section matching '{section}' in {todo_path}"}))
+            sys.exit(1)
+        heading, sec_start, sec_end = match
+    else:
+        # Use first ## heading
+        sections = find_sections(text)
+        if not sections:
+            print(json.dumps({"error": f"No ## sections found in {todo_path}"}))
+            sys.exit(1)
+        heading, sec_start, sec_end, _ = sections[0]
+
+    # Insert at end of section
+    heading_end = text.index("\n", sec_start) + 1
+    insert_pos = sec_end
+    bullet = f"- [ ] {args.item}\n\n"
+    text = text[:insert_pos].rstrip("\n") + "\n\n" + bullet + text[insert_pos:].lstrip("\n")
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = ensure_trailing_newline(text)
+    todo_path.write_text(text)
+
+    print(json.dumps({
+        "ok": True,
+        "file": str(todo_path),
+        "section": heading,
+        "item": args.item,
+    }))
+
+
+def cmd_todo_next(args):
+    home = args.home
+    todo_path = resolve_todo_file(home, args.file)
+    if not todo_path:
+        print(json.dumps({"error": f"No TODO.md found for home '{home}'"}))
+        sys.exit(1)
+
+    text = todo_path.read_text()
+
+    if args.section:
+        # Find specific section
+        match = find_section_case_insensitive(text, args.section)
+        if not match:
+            print(json.dumps({"error": f"No section matching '{args.section}' in {todo_path}"}))
+            sys.exit(1)
+        heading, sec_start, sec_end = match
+        heading_end = text.index("\n", sec_start) + 1
+        content = text[heading_end:sec_end]
+        instructions = get_section_instructions(content)
+        items = parse_todo_items(content)
+        unchecked = [(t, raw) for t, checked, raw, _, _ in items if not checked]
+        if not unchecked:
+            print(json.dumps({
+                "file": str(todo_path),
+                "section": heading,
+                "item": None,
+                "instructions": instructions,
+            }))
+            return
+        print(json.dumps({
+            "file": str(todo_path),
+            "section": heading,
+            "item": unchecked[0][0],
+            "instructions": instructions,
+        }))
+    else:
+        # List first unchecked from each section
+        result = {"file": str(todo_path), "sections": []}
+        for heading, sec_start, sec_end, _ in find_sections(text):
+            heading_end = text.index("\n", sec_start) + 1
+            content = text[heading_end:sec_end]
+            items = parse_todo_items(content)
+            unchecked = [t for t, checked, _, _, _ in items if not checked]
+            if unchecked:
+                result["sections"].append({
+                    "name": heading,
+                    "item": unchecked[0],
+                    "count": len(unchecked),
+                })
+        print(json.dumps(result, indent=2))
+
+
+def cmd_todo_done(args):
+    home = args.home
+    todo_path = resolve_todo_file(home, args.file)
+    if not todo_path:
+        print(json.dumps({"error": f"No TODO.md found for home '{home}'"}))
+        sys.exit(1)
+
+    text = todo_path.read_text()
+    search_text = args.item.strip()
+
+    # Find the item across all sections
+    found = None
+    for heading, sec_start, sec_end, _ in find_sections(text):
+        if heading.lower() == "done":
+            continue  # don't match items already in Done
+        heading_end = text.index("\n", sec_start) + 1
+        content = text[heading_end:sec_end]
+        items = parse_todo_items(content)
+        for item_text, is_checked, raw, item_start, item_end in items:
+            if is_checked:
+                continue
+            # Match by substring
+            if search_text.lower() in item_text.lower():
+                found = (heading, heading_end, item_text, raw, item_start, item_end)
+                break
+        if found:
+            break
+
+    if not found:
+        print(json.dumps({"error": f"No unchecked item matching '{search_text}'"}))
+        sys.exit(1)
+
+    src_heading, heading_end, item_text, raw, item_start, item_end = found
+
+    # Build the done version of the item
+    done_raw = raw.replace("- [ ] ", "- [x] ", 1)
+
+    # If --plan provided, append plan link to the item
+    if args.plan:
+        plan_name = args.plan
+        plan_link = f" (plan: [{plan_name}](plans/{plan_name}))"
+        # Insert before the trailing newline of the first line
+        done_lines = done_raw.splitlines(keepends=True)
+        done_lines[0] = done_lines[0].rstrip("\n") + plan_link + "\n"
+        done_raw = "".join(done_lines)
+
+    # Remove from source section
+    abs_start = heading_end + item_start
+    abs_end = heading_end + item_end
+    text = text[:abs_start] + text[abs_end:]
+
+    # Find Done section and append
+    done_sec = get_section_content(text, "Done")
+    if not done_sec:
+        # Create Done section at end
+        text = text.rstrip("\n") + "\n\n## Done\n\n"
+        done_sec = get_section_content(text, "Done")
+
+    done_heading_end, done_end, done_content = done_sec
+    # Append at end of Done section
+    insert_pos = done_end
+    text = text[:insert_pos].rstrip("\n") + "\n\n" + done_raw.rstrip("\n") + "\n" + text[insert_pos:].lstrip("\n")
+
+    # If --plan provided, also add to Plans section
+    if args.plan:
+        plan_name = args.plan
+        plans_sec = get_section_content(text, "Plans")
+        if plans_sec:
+            plans_heading_end, plans_end, _ = plans_sec
+            plan_item = f"- [ ] Implement the plan in [plans/{plan_name}](plans/{plan_name})\n\n"
+            text = text[:plans_end].rstrip("\n") + "\n\n" + plan_item + text[plans_end:].lstrip("\n")
+
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = ensure_trailing_newline(text)
+    todo_path.write_text(text)
+
+    print(json.dumps({
+        "ok": True,
+        "file": str(todo_path),
+        "item": item_text,
+        "from_section": src_heading,
+        "plan": args.plan or None,
+    }))
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -392,6 +658,23 @@ def main():
     done.add_argument("--project", required=True)
     done.add_argument("--index", type=int, default=None)
 
+    ta = sub.add_parser("todo-add")
+    ta.add_argument("--home", required=True)
+    ta.add_argument("--section", default="")
+    ta.add_argument("--item", required=True)
+    ta.add_argument("--file", default=None)
+
+    tn = sub.add_parser("todo-next")
+    tn.add_argument("--home", required=True)
+    tn.add_argument("--section", default="")
+    tn.add_argument("--file", default=None)
+
+    td = sub.add_parser("todo-done")
+    td.add_argument("--home", required=True)
+    td.add_argument("--item", required=True)
+    td.add_argument("--plan", default=None)
+    td.add_argument("--file", default=None)
+
     args = parser.parse_args()
 
     cmds = {
@@ -401,6 +684,9 @@ def main():
         "add": cmd_add,
         "dispatch": cmd_dispatch,
         "done": cmd_done,
+        "todo-add": cmd_todo_add,
+        "todo-next": cmd_todo_next,
+        "todo-done": cmd_todo_done,
     }
     cmds[args.command](args)
 

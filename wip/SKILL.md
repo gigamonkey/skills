@@ -73,15 +73,13 @@ project's `todos` skill can work on it.
    ```
    This removes the first item from the project section, moves it to
    `## In progress`, and returns `{item, section_hint, project}`.
-3. Use the returned `section_hint` (if any) and project `home` to insert
-   the item into the project's TODO.md:
-   - Look up the project's home directory via `list-projects` or the
-     dispatch response.
-   - Read the project's TODO.md: prefer `{home}/plans/TODO.md`, fall back
-     to `{home}/TODO.md`. If neither exists, create `{home}/plans/TODO.md`.
-   - If `section_hint` is non-empty, find the first `## ` heading matching
-     it case-insensitively. Otherwise use the **first `##` heading**.
-   - Append `- [ ] {item text}` at the end of that section.
+3. Look up the project's home directory from the dispatch response or
+   `list-projects`. Then add the item to the project's TODO.md:
+   ```
+   python3 ~/.claude/skills/wip/wip.py todo-add \
+     --home <project_home> --section "<section_hint>" --item "<item_text>"
+   ```
+   Omit `--section` if no hint was returned (defaults to first section).
 4. Tell the user what was dispatched and where (project, TODO file path, and
    section).
 
