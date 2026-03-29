@@ -570,7 +570,7 @@ def cmd_todo_start(args):
 
     # Append to end of ## In progress
     insert_pos = ip_end
-    text = text[:insert_pos].rstrip("\n") + "\n\n" + raw.rstrip("\n") + "\n" + text[insert_pos:].lstrip("\n")
+    text = text[:insert_pos].rstrip("\n") + "\n\n" + raw.rstrip("\n") + "\n\n" + text[insert_pos:].lstrip("\n")
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = ensure_trailing_newline(text)
     todo_path.write_text(text)
@@ -708,7 +708,7 @@ def cmd_todo_done(args):
 
     done_heading_end, done_end, done_content = done_sec
     insert_pos = done_end
-    text = text[:insert_pos].rstrip("\n") + "\n\n" + done_raw.rstrip("\n") + "\n" + text[insert_pos:].lstrip("\n")
+    text = text[:insert_pos].rstrip("\n") + "\n\n" + done_raw.rstrip("\n") + "\n\n" + text[insert_pos:].lstrip("\n")
 
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = ensure_trailing_newline(text)
